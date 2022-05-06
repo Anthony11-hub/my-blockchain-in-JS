@@ -42,11 +42,29 @@ class Blockchain{
         this.chain.push(newBlock);//pushes it to the chain
         //in reality we cannot add new blocks so easily since there are so many checks in place
     }
+
+    isChainValid(){//fn to verify integrity
+        for(let i = 1; i < this.chain.length; i++){
+            const currentBlock = this.chain[1];
+            const previousBlock = this.chain[i - 1];
+
+            if(currentBlock.hash !== currentBlock.calculateHash()){
+                return false;
+            }
+            if(currentBlock.previousHash !== previousBlock.hash){
+                return false;
+            }
+        }
+        return true;
+
+    }
 }
 
 //testing it -- my coin is called tcoin
 let tcoin = new Blockchain();
 tcoin.addBlock(new Block(1, "07/05/2022", { amount: 4 }));
 tcoin.addBlock(new Block(2, "04/05/2022", { amount: 7 }));
+
+// console.log('Is blockchain valid? ' + tcoin.isChainValid());
 
 console.log(JSON.stringify(tcoin, null, 4)); 
