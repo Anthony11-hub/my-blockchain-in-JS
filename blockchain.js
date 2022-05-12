@@ -1,10 +1,42 @@
 const SHA256 = require('crypto-js/sha256');
+const EC = require('elliptic').ec;
+const ec = new EC('secp256k1');
+
 
 class Transaction{
     constructor(fromAddress, toAddress, amount){
         this.fromAddress = fromAddress;
         this.toAddress = toAddress;
         this.amount = amount;
+    }
+
+    calculateHash(){//returns the sha-256 hash of that transaction
+        //this hash is the one we are going to sign with the private key
+        return SHA256(this.fromAddress + this.toAddress + this.amount).toString();
+    }
+
+    signTransaction(signingKey){
+        //signingKey will be the object that we pull out from ec.genKeyPait()
+        if(signingKey.getPublic('hex') !== this.fromAddress){
+            throw new Error('You cannot sign transactions for other wallets');
+        }
+
+        const hashTx = this.calculateHash();
+        const sig = signingKey.sign(hashTx, 'base64');
+        this.sgnature = sig.toDER('hex');
+    }
+
+    isValid(){
+        //check if fromAddress is null, if it is then its valid
+        if(this.fromAddress === null) return true;
+        //check if there is a signature
+        if(!this.signature || this.signature.length === 0){
+            throw new Error('No signature in this transaction')
+        }
+        //if there is a signature, we are going to extract the public key
+        //and verify that this transaction has indeed been signed by that key
+        const publicKey = ec.keyfromPublic(this.fromAddress, 'hex');
+        return publicKey.verify(this.calculateHash(), this.signature);
     }
 }
 
@@ -38,6 +70,17 @@ class Block{
         }
         console.log("Block mined! " + this.hash);
     }
+
+    hasValidTransaction(){
+        //method verifies all the transactions in the current block
+        for(const tx of this.transaction){
+            if(!tx.isValid()){
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
 
 class Blockchain{
@@ -59,19 +102,28 @@ class Blockchain{
     minePendingTransactions(miningRewardAddress){
         //when method is called it will pass along its wallet address
         //in real world coins adding all pending transactions to a block is not possible
+        const rewardTx = new Transaction(null, miningRewardAddress, this.miningReward);
+        this.pendingTransactions.push(rewardTx);
+        
         let block = new Block(Date.now(), this.pendingTransactions);
         block.mineBlock(this.difficulty);
 
         console.log('Block succesfully mined!')
         this.chain.push(block);
 
-        this.pendingTransactions = [
-            new Transaction(null, miningRewardAddress, this.miningReward)
-        ];
-
+        this.pendingTransactions = [];
     }
 
-    createTransaction(transaction){//receive transaction and add to pending transaction area
+    addTransaction(transaction){//receive transaction and add to pending transaction area
+        
+        if(!transaction.fromAddress || !transaction.toAddress){
+            throw new Error('Transaction must include from and to address');
+        }
+
+        if(!transaction.isValid()){
+            throw new Error('Cannot add invalid transaction to the chain');
+        }
+
         this.pendingTransactions.push(transaction);
     }
 
@@ -103,9 +155,14 @@ class Blockchain{
     // }
 
     isChainValid(){//Verify integrity
+        //goes over all the blocks in our chain and verifies that the hashes are correct and each block links to the previous block
         for(let i = 1; i < this.chain.length; i++){
             const currentBlock = this.chain[1];
             const previousBlock = this.chain[i - 1];
+
+            if(!currentBlock.hasValidTransaction()){
+                return false;
+            }
 
             if(currentBlock.hash !== currentBlock.calculateHash()){
                 return false;
@@ -119,5 +176,5 @@ class Blockchain{
     }
 }
 
-modules.exports.Blockchain = Blockchain;
-modules.exports.Transaction = Transaction;
+module.exports.Blockchain = Blockchain;
+module.exports.Transaction = Transaction;
