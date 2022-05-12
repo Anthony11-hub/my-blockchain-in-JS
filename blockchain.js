@@ -118,3 +118,6 @@ class Blockchain{
 
     }
 }
+
+modules.exports.Blockchain = Blockchain;
+modules.exports.Transaction = Transaction;
